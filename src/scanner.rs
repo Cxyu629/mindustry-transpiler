@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::default;
 
-use crate::error;
+use crate::error::error;
 use crate::token::Object;
 use crate::token::Position;
 use crate::token::Token;

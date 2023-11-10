@@ -1,10 +1,8 @@
-use std::{error::Error, fmt::Display};
-
 use crate::{
     error::ParseError,
     expr::*,
-    token::{TokenType as TT, *},
-    parse_error,
+    stmt::{ExpressionStmt, Stmt, IntoStmt},
+    token::{Object, Token, TokenType as TT},
 };
 
 #[macro_use]
@@ -24,8 +22,35 @@ impl Parser {
         }
     }
 
-    pub fn parse(&mut self) -> Result<Expr, ParseError> {
-        return self.expression();
+    pub fn parse(&mut self) -> (Vec<Stmt>, bool) {
+        let mut statements = Vec::new();
+        let mut has_error = false;
+
+        while !self.is_at_end() {
+            match self.statement() {
+                Ok(statement) => {
+                    statements.push(statement);
+                }
+                Err(error) => {
+                    eprintln!("{}", error);
+                    has_error = true;
+                }
+            }
+        }
+
+        (statements, !has_error)
+    }
+
+    fn statement(&mut self) -> Result<Stmt, ParseError> {
+        // TODO: other kinds of statements
+
+        self.expression_statement()
+    }
+
+    fn expression_statement(&mut self) -> Result<Stmt, ParseError> {
+        let expr = self.expression()?;
+        self.consume(TT::Semicolon, "Expected ';' after expression.");
+        Ok(ExpressionStmt::new(expr).into_stmt())
     }
 
     fn expression(&mut self) -> Result<Expr, ParseError> {
@@ -47,7 +72,7 @@ impl Parser {
         if self.cond_advance(vec![TT::Plus, TT::Minus, TT::Tilde, TT::Not]) {
             let operator = self.previous().to_owned();
             let right = self.unary()?;
-            Ok(Unary::new(operator, right).into_expr())
+            Ok(UnaryExpr::new(operator, right).into_expr())
         } else {
             self.exponential()
         }
@@ -61,11 +86,11 @@ impl Parser {
 
             let save = self.current;
             if let Ok(right) = self.exponential() {
-                Ok(Binary::new(operator, left, right).into_expr())
+                Ok(BinaryExpr::new(operator, left, right).into_expr())
             } else {
                 self.current = save;
                 let right = self.unary()?;
-                Ok(Binary::new(operator, left, right).into_expr())
+                Ok(BinaryExpr::new(operator, left, right).into_expr())
             }
         } else {
             Ok(left)
@@ -76,32 +101,32 @@ impl Parser {
         match self.peek().ttype {
             TT::False => {
                 self.advance();
-                Ok(Literal::new(Object::Boolean(false)).into_expr())
+                Ok(LiteralExpr::new(Object::Boolean(false)).into_expr())
             }
             TT::True => {
                 self.advance();
-                Ok(Literal::new(Object::Boolean(true)).into_expr())
+                Ok(LiteralExpr::new(Object::Boolean(true)).into_expr())
             }
             TT::Null => {
                 self.advance();
-                Ok(Literal::new(Object::Null).into_expr())
+                Ok(LiteralExpr::new(Object::Null).into_expr())
             }
 
             TT::Number | TT::String => {
                 let token = self.advance();
-                return Ok(Literal::new(token.literal.clone().unwrap()).into_expr());
+                return Ok(LiteralExpr::new(token.literal.clone().unwrap()).into_expr());
             }
 
             TT::LParen => {
                 self.advance();
                 let expr = self.expression()?;
                 self.consume(TT::RParen, "Expected ')' after expression.")?;
-                Ok(Grouping::new(expr).into_expr())
+                Ok(GroupingExpr::new(expr).into_expr())
             }
-            _ => {
-                let error = self.report_error(self.peek(), "Expected expression.");
-                Err(error)
-            }
+            _ => Err(ParseError::new(
+                self.peek(),
+                "Expected expression.".to_owned(),
+            )),
         }
     }
 
@@ -127,7 +152,7 @@ impl Parser {
         if self.check(ttype) {
             Ok(self.advance())
         } else {
-            Err(self.report_error(self.peek(), message))
+            Err(ParseError::new(self.peek(), message.to_owned()))
         }
     }
 
@@ -171,11 +196,5 @@ impl Parser {
 
     fn peek_n(&self, n: usize) -> &Token {
         self.tokens.get(self.current + n).unwrap()
-    }
-
-    fn report_error(&self, token: &Token, message: &str) -> ParseError {
-        let error = ParseError::new(token, message.to_owned());
-        parse_error(&error);
-        error
     }
 }

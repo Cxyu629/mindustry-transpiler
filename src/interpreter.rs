@@ -2,9 +2,9 @@ use std::ops::{Add, BitAnd, BitOr, BitXor, Div, Mul, Rem, Shl, Shr, Sub};
 
 use crate::{
     error::EvaluationError,
-    expr::{Binary, Expr, Grouping, Literal, Unary},
-    runtime_error,
-    token::{Object as Ob, Token, TokenType as TT},
+    expr::*,
+    stmt::*,
+    token::{Object as Ob, TokenType as TT},
 };
 
 #[macro_use]
@@ -13,25 +13,25 @@ mod macros;
 pub struct Interpreter {}
 
 impl Interpreter {
-    pub fn new() -> Self {
-        Self {}
-    }
+    pub fn interpret(statements: Vec<impl Interpretable>) -> bool {
+        let mut statements_iter = statements.iter();
 
-    pub fn interpret(expr: impl Interpretable) {
-        match expr.evaluate() {
-            Ok(value) => println!("{}", value),
-            Err(error) => runtime_error(&error),
+        while let Some(statement) = statements_iter.next() {
+            match (*statement).evaluate() {
+                Ok(value) => println!("{}", value),
+                Err(error) => {
+                    println!("{}", &error);
+                    return false;
+                }
+            }
         }
+
+        true
     }
 }
 
 pub trait Interpretable {
     fn evaluate(&self) -> Result<Ob, EvaluationError>;
-    fn report_error(&self, token: &Token, message: String) -> EvaluationError {
-        let error = EvaluationError::new(token, message);
-        runtime_error(&error);
-        error
-    }
 }
 
 impl Interpretable for Expr {
@@ -40,7 +40,7 @@ impl Interpretable for Expr {
     }
 }
 
-impl Interpretable for Unary {
+impl Interpretable for UnaryExpr {
     fn evaluate(&self) -> Result<Ob, EvaluationError> {
         let eval_right = self.right.evaluate()?;
         match ((self.operator).ttype, &eval_right) {
@@ -63,7 +63,7 @@ impl Interpretable for Unary {
     }
 }
 
-impl Interpretable for Binary {
+impl Interpretable for BinaryExpr {
     fn evaluate(&self) -> Result<Ob, EvaluationError> {
         let eval_left = self.left.evaluate()?;
         let eval_right = self.right.evaluate()?;
@@ -148,17 +148,11 @@ impl Interpretable for Binary {
 
             TT::And => match (&eval_left, &eval_right) {
                 (Boolean(val_left), Boolean(val_right)) => Ok(Boolean(*val_left && *val_right)),
-                _ => Err(self.report_error(
-                    &self.operator,
-                    bin_err_msg!(self.operator, eval_left, eval_right),
-                )),
+                _ => generic_error!(self, eval_left, eval_right),
             },
             TT::Or => match (&eval_left, &eval_right) {
                 (Boolean(val_left), Boolean(val_right)) => Ok(Boolean(*val_left || *val_right)),
-                _ => Err(self.report_error(
-                    &self.operator,
-                    bin_err_msg!(self.operator, eval_left, eval_right),
-                )),
+                _ => generic_error!(self, eval_left, eval_right),
             },
 
             _ => panic!(
@@ -169,14 +163,32 @@ impl Interpretable for Binary {
     }
 }
 
-impl Interpretable for Grouping {
+impl Interpretable for GroupingExpr {
     fn evaluate(&self) -> Result<Ob, EvaluationError> {
         self.expression.evaluate()
     }
 }
 
-impl Interpretable for Literal {
+impl Interpretable for LiteralExpr {
     fn evaluate(&self) -> Result<Ob, EvaluationError> {
         Ok(self.value.to_owned())
+    }
+}
+
+impl Interpretable for Stmt {
+    fn evaluate(&self) -> Result<Ob, EvaluationError> {
+        self.0.borrow().evaluate()
+    }
+}
+
+impl Interpretable for ExpressionStmt {
+    fn evaluate(&self) -> Result<Ob, EvaluationError> {
+        self.expression.evaluate()
+    }
+}
+
+impl Interpretable for VarStmt {
+    fn evaluate(&self) -> Result<Ob, EvaluationError> {
+        todo!()
     }
 }

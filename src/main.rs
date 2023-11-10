@@ -5,9 +5,11 @@ use mindustry_transpiler::{
 };
 
 fn main() {
-    let source = r#"3**--4**1-"#.to_owned();
+    let source = r#"3**--null**-1"#.to_owned();
 
-    run(source.into_bytes());
+    if let Err(error) = run(source.into_bytes()) {
+        // println!("{}", error);
+    };
 
     // Expr expression = new Expr.Binary(
     //     new Expr.Unary(
@@ -17,17 +19,17 @@ fn main() {
     //     new Expr.Grouping(
     //         new Expr.Literal(45.67)));
 
-    let ex = Unary::new(
+    let ex = UnaryExpr::new(
         Token::new(TT::Minus, "-".to_owned(), None, Position::new(1, 1)),
-        Literal {
+        LiteralExpr {
             value: Object::Number(123.),
         },
     );
 
-    let bin = Binary::new(
+    let bin = BinaryExpr::new(
         Token::new(TT::Ast, "*".to_owned(), None, Position::new(1, 1)),
         ex,
-        Grouping::new(Literal::new(Object::Degree(45.67))),
+        GroupingExpr::new(LiteralExpr::new(Object::Degree(45.67))),
     );
 
     println!("{}", bin)

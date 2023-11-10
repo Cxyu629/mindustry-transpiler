@@ -29,10 +29,7 @@ macro_rules! bin_match {
             $($(
                 $pat => $e,
             )*)?
-            _ => Err($self.report_error(
-                &$self.operator,
-                bin_err_msg!($self.operator, $left, $right),
-            )),
+            _ => generic_error!($self, $left, $right),
         }
     };
 }
@@ -47,10 +44,7 @@ macro_rules! bin_match_deref {
             $($(
                 $pat => $e,
             )*)?
-            _ => Err($self.report_error(
-                &$self.operator,
-                bin_err_msg!($self.operator, $left, $right),
-            )),
+            _ => generic_error!($self, $left, $right),
         }
     };
 }
@@ -61,10 +55,7 @@ macro_rules! bin_match_iuf {
             (Number(val_left), Number(val_right)) => Ok(Number(
                 ((*val_left as i32).$op(*val_right as u32)) as f32,
             )),
-            _ => Err($self.report_error(
-                &$self.operator,
-                bin_err_msg!($self.operator, $left, $right),
-            )),
+            _ => generic_error!($self, $left, $right),
         }
     };
 }
@@ -75,20 +66,16 @@ macro_rules! bin_match_iif {
             (Number(val_left), Number(val_right)) => Ok(Number(
                 ((*val_left as i32).$op(*val_right as i32)) as f32,
             )),
-            _ => Err($self.report_error(
-                &$self.operator,
-                bin_err_msg!($self.operator, $left, $right),
-            )),
+            _ => generic_error!($self, $left, $right),
         }
     };
 }
 
-macro_rules! vec2d {
-    [ $( [ $( $d:expr ),* ] ),* ] => {
-        vec![
-            $(
-                vec![$($d),*],
-            )* 
-        ]
+macro_rules! generic_error {
+    ($self: ident, $left: ident, $right: ident) => {
+        Err(EvaluationError::new(
+            &$self.operator,
+            bin_err_msg!($self.operator, $left, $right),
+        ))
     }
 }

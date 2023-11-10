@@ -1,57 +1,44 @@
-use std::{
-    cell::RefCell,
-    fmt,
-    rc::Rc,
-};
+use std::{cell::RefCell, fmt, rc::Rc};
 
-use crate::{
-    interpreter::Interpretable,
-    token::{Object, Token},
-};
+use crate::interpreter;
+use crate::parser;
+use crate::printer;
+use crate::scanner;
+use crate::token::{Object, Token};
+
+use self::interpreter::Interpretable;
 
 pub trait ExprLike: fmt::Display + Interpretable {}
 pub trait IntoExpr {
     fn into_expr(self) -> Expr;
 }
 
-// pub trait ExprClone {
-//     fn expr_clone(&self) -> Expr;
-// }
+// ========== Expr ==========
 
 #[derive(Clone)]
 pub struct Expr(pub Rc<RefCell<dyn ExprLike>>);
 
 impl ExprLike for Expr {}
-impl fmt::Display for Expr {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.0.borrow())
-    }
-}
+
 // ========== Unary ==========
 
-pub struct Unary {
+pub struct UnaryExpr {
     pub operator: Token,
     pub right: Box<dyn ExprLike>,
 }
 
-impl Unary {
-    pub fn new(operator: Token, right: impl ExprLike + 'static) -> Unary {
-        Unary {
+impl UnaryExpr {
+    pub fn new(operator: Token, right: impl ExprLike + 'static) -> UnaryExpr {
+        UnaryExpr {
             operator,
             right: Box::new(right),
         }
     }
 }
 
-impl ExprLike for Unary {}
+impl ExprLike for UnaryExpr {}
 
-impl fmt::Display for Unary {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "({} {})", self.operator.lexeme, self.right)
-    }
-}
-
-impl IntoExpr for Unary {
+impl IntoExpr for UnaryExpr {
     fn into_expr(self) -> Expr {
         Expr(Rc::new(RefCell::new(self)))
     }
@@ -59,19 +46,19 @@ impl IntoExpr for Unary {
 
 // ========== Binary ==========
 
-pub struct Binary {
+pub struct BinaryExpr {
     pub operator: Token,
     pub left: Box<dyn ExprLike>,
     pub right: Box<dyn ExprLike>,
 }
 
-impl Binary {
+impl BinaryExpr {
     pub fn new(
         operator: Token,
         left: impl ExprLike + 'static,
         right: impl ExprLike + 'static,
-    ) -> Binary {
-        Binary {
+    ) -> BinaryExpr {
+        BinaryExpr {
             operator,
             left: Box::new(left),
             right: Box::new(right),
@@ -79,14 +66,9 @@ impl Binary {
     }
 }
 
-impl ExprLike for Binary {}
-impl fmt::Display for Binary {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "({} {} {})", self.operator.lexeme, self.left, self.right)
-    }
-}
+impl ExprLike for BinaryExpr {}
 
-impl IntoExpr for Binary {
+impl IntoExpr for BinaryExpr {
     fn into_expr(self) -> Expr {
         Expr(Rc::new(RefCell::new(self)))
     }
@@ -94,26 +76,21 @@ impl IntoExpr for Binary {
 
 // ========== Grouping ==========
 
-pub struct Grouping {
+pub struct GroupingExpr {
     pub expression: Box<dyn ExprLike>,
 }
 
-impl Grouping {
-    pub fn new<'a>(expression: impl ExprLike + 'static) -> Grouping {
-        Grouping {
+impl GroupingExpr {
+    pub fn new<'a>(expression: impl ExprLike + 'static) -> GroupingExpr {
+        GroupingExpr {
             expression: Box::new(expression),
         }
     }
 }
 
-impl ExprLike for Grouping {}
-impl fmt::Display for Grouping {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "({})", self.expression)
-    }
-}
+impl ExprLike for GroupingExpr {}
 
-impl IntoExpr for Grouping {
+impl IntoExpr for GroupingExpr {
     fn into_expr(self) -> Expr {
         Expr(Rc::new(RefCell::new(self)))
     }
@@ -121,25 +98,32 @@ impl IntoExpr for Grouping {
 
 // ===== Literal =====
 
-pub struct Literal {
+pub struct LiteralExpr {
     pub value: Object,
 }
 
-impl Literal {
+impl LiteralExpr {
     pub fn new(value: Object) -> Self {
         Self { value }
     }
 }
 
-impl ExprLike for Literal {}
-impl fmt::Display for Literal {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.value)
+impl ExprLike for LiteralExpr {}
+
+impl IntoExpr for LiteralExpr {
+    fn into_expr(self) -> Expr {
+        Expr(Rc::new(RefCell::new(self)))
     }
 }
 
-impl IntoExpr for Literal {
-    fn into_expr(self) -> Expr {
-        Expr(Rc::new(RefCell::new(self)))
+// ===== VariableExpr =====
+
+pub struct Variable {
+    pub name: Token,
+}
+
+impl Variable {
+    pub fn new(name: Token) -> Self {
+        Self { name }
     }
 }

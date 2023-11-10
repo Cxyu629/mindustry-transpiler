@@ -38,7 +38,7 @@ impl Object {
         match self {
             Object::Number(x) => Object::Number(*x),
             Object::Degree(x) => Object::Number(*x),
-            Object::String(x) => Object::Number(1.),
+            Object::String(_) => Object::Number(1.),
             Object::Boolean(x) => Object::Number(if *x { 1. } else { 0. }),
             Object::Null => Object::Number(0.),
         }

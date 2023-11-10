@@ -9,7 +9,7 @@ macro_rules! binary {
             while valid {
                 let operator = self.previous().to_owned();
                 let right = self.$prev_fun()?.clone();
-                left = Binary::new(operator, left, right).into_expr();
+                left = BinaryExpr::new(operator, left, right).into_expr();
                 valid = self.cond_advance(vec![$x$(, $y)*]);
             }
             Ok(left)
