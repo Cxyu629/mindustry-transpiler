@@ -289,11 +289,12 @@ impl Scanner {
                 String::from_utf8(self.source[(self.start + 1)..(self.current - 1)].into())
                     .unwrap();
             let position = Position::new(self.startln, self.start + 1);
+            let literal = Some(Object::String(lexeme.to_owned()));
 
             self.tokens.push(Token {
                 ttype: TT::String,
                 lexeme,
-                literal: None,
+                literal,
                 position,
             })
         }
