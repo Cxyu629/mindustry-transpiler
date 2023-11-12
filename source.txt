@@ -1,6 +1,33 @@
+var a = "global a";
+var b = "global b";
+var c = "global c";
+{
+  var a = "outer a";
+  var b = "outer b";
+  {
+    var a = "inner a";
+    print a;
+    print b;
+    print c;
+  }
+  print a;
+  print b;
+  print c;
+}
+print a;
+print b;
+print c;
+
+
+var a = 0;
+var temp;
 var a = 1;
-var b = 200;
-var x;
-var str = "hello world";
-var str2 = "\nhi";
-print str + str2;
+
+for (var b = 1; a < 10000; b = temp + b) {
+  print a;
+  temp = a;
+  a = b;
+}
+
+print b;
+

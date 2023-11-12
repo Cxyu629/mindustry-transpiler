@@ -181,6 +181,7 @@ impl Scanner {
         keywords.insert("and", TT::And);
         keywords.insert("or", TT::Or);
         keywords.insert("not", TT::Not);
+        keywords.insert("do", TT::Do);
         keywords.insert("while", TT::While);
         keywords.insert("for", TT::For);
         keywords.insert("if", TT::If);

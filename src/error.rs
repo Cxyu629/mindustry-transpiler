@@ -2,7 +2,6 @@ use std::{error, fmt};
 
 use crate::token::{Token, TokenType as TT};
 
-
 #[derive(Debug)]
 pub struct RuntimeError {
     pub token: Token,

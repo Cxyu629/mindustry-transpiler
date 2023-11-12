@@ -10,7 +10,7 @@ macro_rules! bin_err_msg {
 }
 
 macro_rules! bin_match {
-    ($self:ident, $left:ident, $right: ident, $op:tt, {[$a1:tt, $b1:tt, $c1:tt]$(, [$a2:tt, $b2:tt, $c2:tt])* $(, )?}$(, {$([$pat:pat, $e:expr], )*})? ) => {
+    ($operator:ident, $left:ident, $right: ident, $op:tt, {[$a1:tt, $b1:tt, $c1:tt]$(, [$a2:tt, $b2:tt, $c2:tt])* $(, )?}$(, {$([$pat:pat, $e:expr], )*})? ) => {
         match (&$left, &$right) {
             ($a1(val_left), $b1(val_right)) => Ok($c1(val_left.$op(val_right))),
             $(
@@ -19,13 +19,13 @@ macro_rules! bin_match {
             $($(
                 $pat => $e,
             )*)?
-            _ => generic_error!($self, $left, $right),
+            _ => generic_bin_error!($operator, $left, $right),
         }
     };
 }
 
 macro_rules! bin_match_deref {
-    ($self:ident, $left:ident, $right: ident, $op:tt, {[$a1:tt, $b1:tt, $c1:tt]$(, [$a2:tt, $b2:tt, $c2:tt])* $(, )?}$(, {$([$pat:pat, $e:expr], )*})? ) => {
+    ($operator:ident, $left:ident, $right: ident, $op:tt, {[$a1:tt, $b1:tt, $c1:tt]$(, [$a2:tt, $b2:tt, $c2:tt])* $(, )?}$(, {$([$pat:pat, $e:expr], )*})? ) => {
         match (&$left, &$right) {
             ($a1(val_left), $b1(val_right)) => Ok($c1(val_left.$op(*val_right))),
             $(
@@ -34,7 +34,7 @@ macro_rules! bin_match_deref {
             $($(
                 $pat => $e,
             )*)?
-            _ => generic_error!($self, $left, $right),
+            _ => generic_bin_error!($operator, $left, $right),
         }
     };
 }
@@ -45,27 +45,27 @@ macro_rules! bin_match_iuf {
             (Number(val_left), Number(val_right)) => {
                 Ok(Number(((*val_left as i32).$op(*val_right as u32)) as f32))
             }
-            _ => generic_error!($self, $left, $right),
+            _ => generic_bin_error!($self, $left, $right),
         }
     };
 }
 
 macro_rules! bin_match_iif {
-    ($self:ident, $left:ident, $right: ident, $op:tt) => {
+    ($operator:ident, $left:ident, $right: ident, $op:tt) => {
         match (&$left, &$right) {
             (Number(val_left), Number(val_right)) => {
                 Ok(Number(((*val_left as i32).$op(*val_right as i32)) as f32))
             }
-            _ => generic_error!($self, $left, $right),
+            _ => generic_bin_error!($operator, $left, $right),
         }
     };
 }
 
-macro_rules! generic_error {
-    ($self: ident, $left: ident, $right: ident) => {
+macro_rules! generic_bin_error {
+    ($operator: ident, $left: ident, $right: ident) => {
         Err(Interpreter::error(
-            &$self.operator,
-            bin_err_msg!($self.operator, $left, $right),
+            &$operator,
+            bin_err_msg!($operator, $left, $right),
         ))
     };
 }

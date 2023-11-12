@@ -15,6 +15,7 @@ pub mod printer;
 pub mod scanner;
 pub mod stmt;
 pub mod token;
+pub mod callable;
 
 pub mod macros;
 
@@ -35,9 +36,9 @@ pub fn run(source: Vec<u8>) -> Result<(), ()> {
     let mut parser = Parser::new(tokens);
     let (statements, success) = parser.parse();
     println!("statements: {}", statements.len());
-    for statement in (&statements).into_iter() {
-        println!("{}", statement);
-    }
+    // for statement in (&statements).into_iter() {
+    //     println!("{}", statement);
+    // }
     eprintln!("parsed");
 
     if let Err(_) = success {

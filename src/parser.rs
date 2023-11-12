@@ -6,7 +6,28 @@ use crate::{
 };
 
 #[macro_use]
-mod macros;
+mod macros {
+    macro_rules! binary {
+        (($fun: tt, $prev_fun: tt, [h $x:expr$(, $y:expr)*])) => {
+            fn $fun(&mut self) -> Result<Expr, ParseError> {
+                let mut left = self.$prev_fun()?.clone();
+
+                let mut valid = self.cond_advance(vec![$x$(, $y)*]).cloned();
+
+                while let Some(operator) = valid {
+                    let right = self.$prev_fun()?.clone();
+                    left = Expr::new_binary(
+                        operator.to_owned(),
+                        Box::new(left),
+                        Box::new(right),
+                    );
+                    valid = self.cond_advance(vec![$x$(, $y)*]).cloned();
+                }
+                Ok(left)
+            }
+        };
+    }
+}
 
 #[derive(Default)]
 pub struct Parser {
@@ -45,23 +66,131 @@ impl Parser {
     fn statement(&mut self) -> Result<Stmt, ParseError> {
         // TODO: other kinds of statements
 
-        if let Some(_) = self.cond_advance(vec![TT::Print]) {
-            self.print_statement()
-        } else if let Some(_) = self.cond_advance(vec![TT::Var]) {
+        let mut next = self.peek();
+
+        if next.ttype == TT::Semicolon {
+            self.advance();
+            next = self.peek();
+        }
+        if next.ttype == TT::LBrace {
+            self.block_statement()
+        // } else if let Some(_) = self.cond_advance(vec![TT::Var]) {
+        //     self.var_statement()
+        } else if next.ttype == TT::For {
+            self.for_statement()
+        } else if next.ttype == TT::Do {
+            self.do_while_statement()
+        } else if next.ttype == TT::While {
+            self.while_statement()
+        } else if next.ttype == TT::If {
+            self.if_statement()
+        } else if next.ttype == TT::Var {
             self.var_statement()
+        } else if next.ttype == TT::Print {
+            self.print_statement()
         } else {
             self.expression_statement()
         }
-
     }
 
-    fn print_statement(&mut self) -> Result<Stmt, ParseError> {
-        let value = self.expression()?;
-        self.consume(TT::Semicolon, "Expected ';' after expression.")?;
-        Ok(PrintStmt::new(value).into_stmt())
+    fn block_statement(&mut self) -> Result<Stmt, ParseError> {
+        self.advance();
+
+        let mut statements = Vec::new();
+
+        while !self.check(TT::RBrace) && !self.is_at_end() {
+            statements.push(self.statement()?);
+        }
+
+        self.consume(TT::RBrace, "Expected '}' after block.")?;
+
+        Ok(Stmt::new_block(statements))
+    }
+
+    fn for_statement(&mut self) -> Result<Stmt, ParseError> {
+        self.advance();
+
+        self.consume(TT::LParen, "Expected '(' after 'for'.")?;
+
+        let pre_initialiser: Option<Stmt>;
+        if self.peek().ttype == TT::Semicolon {
+            pre_initialiser = None;
+        } else if self.peek().ttype == TT::Var {
+            pre_initialiser = Some(self.var_statement()?);
+        } else {
+            pre_initialiser = Some(self.expression_statement()?);
+        }
+
+        let mut pre_condition: Option<Expr> = None;
+        if !self.check(TT::Semicolon) {
+            pre_condition = Some(self.expression()?);
+        }
+        self.consume(TT::Semicolon, "Expected ';' after loop condition.")?;
+
+        let mut pre_increment: Option<Expr> = None;
+        if !self.check(TT::RParen) {
+            pre_increment = Some(self.expression()?);
+        }
+        self.consume(TT::RParen, "Expected ')' after for clauses.")?;
+
+        let mut body = self.block_statement()?;
+
+        if let Some(increment) = pre_increment {
+            body = Stmt::new_block(vec![body, Stmt::new_expression(increment)])
+        }
+
+        let condition: Expr = pre_condition.unwrap_or(Expr::new_literal(Object::Boolean(true)));
+        body = Stmt::new_while(condition, Box::new(body));
+
+        if let Some(initialiser) = pre_initialiser {
+            body = Stmt::new_block(vec![initialiser, body]);
+        }
+
+        return Ok(body);
+    }
+
+    fn do_while_statement(&mut self) -> Result<Stmt, ParseError> {
+        self.advance();
+        let body = Box::new(self.block_statement()?);
+        self.consume(TT::While, "Expected 'while'.")?;
+        let condition = self.expression()?;
+
+        self.consume(TT::Semicolon, "Expected ';' after loop condition.")?;
+
+        Ok(Stmt::new_do_while(condition, body))
+    }
+
+    fn while_statement(&mut self) -> Result<Stmt, ParseError> {
+        self.advance();
+        let condition = self.expression()?;
+        let body = Box::new(self.block_statement()?);
+
+        self.consume(TT::Semicolon, "Expected ';' after while loop.")?;
+
+        Ok(Stmt::new_while(condition, body))
+    }
+
+    fn if_statement(&mut self) -> Result<Stmt, ParseError> {
+        self.advance();
+        let condition = self.expression()?;
+
+        let then_branch = Box::new(self.block_statement()?);
+        let else_branch;
+
+        if self.cond_advance(vec![TT::Else]).is_some() {
+            else_branch = Some(Box::new(self.block_statement()?));
+        } else {
+            else_branch = None
+        }
+
+        self.consume(TT::Semicolon, "Expected ';' after if statement.")?;
+
+        Ok(Stmt::new_if(condition, then_branch, else_branch))
     }
 
     fn var_statement(&mut self) -> Result<Stmt, ParseError> {
+        self.advance();
+
         let name = self
             .consume(TT::Identifier, "Expected variable name.")?
             .to_owned();
@@ -71,32 +200,63 @@ impl Parser {
         }
 
         self.consume(TT::Semicolon, "Expected ';' after variable declaration.")?;
-        Ok(VarStmt::new(name, initialiser).into_stmt())
+        Ok(Stmt::new_var(name, initialiser))
+    }
+
+    fn print_statement(&mut self) -> Result<Stmt, ParseError> {
+        self.advance();
+        let value = self.expression()?;
+        self.consume(TT::Semicolon, "Expected ';' after expression.")?;
+        Ok(Stmt::new_print(value))
     }
 
     fn expression_statement(&mut self) -> Result<Stmt, ParseError> {
         let expr = self.expression()?;
         self.consume(TT::Semicolon, "Expected ';' after expression.")?;
-        Ok(ExpressionStmt::new(expr).into_stmt())
+        Ok(Stmt::new_expression(expr))
     }
 
     fn expression(&mut self) -> Result<Expr, ParseError> {
-        // self.logic_or()
         self.assignment()
     }
 
     fn assignment(&mut self) -> Result<Expr, ParseError> {
         let expr = self.logic_or()?;
 
-        if let Some(equals) = self.cond_advance(vec![TT::Equals]) {
+        if let Some(equals) = self.cond_advance(vec![TT::Equals]).cloned() {
             let value = self.assignment()?;
 
-            
+            if let Expr::Variable { name } = &expr {
+                return Ok(Expr::new_assign(name.to_owned(), Box::new(value)));
+            } else {
+                Parser::error(&equals, "Invalid assigment target.".to_owned());
+            }
         }
+
+        Ok(expr)
     }
 
-    binary!((logic_or, logic_and, [h TT::Or]));
-    binary!((logic_and, equality, [h TT::And]));
+    fn logic_or(&mut self) -> Result<Expr, ParseError> {
+        let mut left = self.logic_and()?.clone();
+        let mut valid = self.cond_advance(vec![(TT::Or)]).cloned();
+        while let Some(operator) = valid {
+            let right = self.logic_and()?.clone();
+            left = Expr::new_logical(operator.to_owned(), Box::new(left), Box::new(right));
+            valid = self.cond_advance(vec![(TT::Or)]).cloned();
+        }
+        Ok(left)
+    }
+    fn logic_and(&mut self) -> Result<Expr, ParseError> {
+        let mut left = self.equality()?.clone();
+        let mut valid = self.cond_advance(vec![(TT::And)]).cloned();
+        while let Some(operator) = valid {
+            let right = self.equality()?.clone();
+            left = Expr::new_logical(operator.to_owned(), Box::new(left), Box::new(right));
+            valid = self.cond_advance(vec![(TT::And)]).cloned();
+        }
+        Ok(left)
+    }
+
     binary!((equality, relational, [h TT::Equals2, TT::BangEquals, TT::Equals3]));
     binary!((relational, bit_or, [h TT::LAngle, TT::LAngleEquals, TT::RAngle, TT::RAngleEquals]));
     binary!((bit_or, bit_xor, [h TT::Bar]));
@@ -107,65 +267,111 @@ impl Parser {
     binary!((factor, unary, [h TT::Ast, TT::Slash, TT::Percent, TT::Slash2]));
 
     fn unary(&mut self) -> Result<Expr, ParseError> {
-        if let Some(operator) = self.cond_advance(vec![TT::Plus, TT::Minus, TT::Tilde, TT::Not]) {
+        if let Some(operator) = self
+            .cond_advance(vec![TT::Plus, TT::Minus, TT::Tilde, TT::Not])
+            .cloned()
+        {
             let right = self.unary()?;
-            Ok(UnaryExpr::new(operator.to_owned(), right).into_expr())
+            Ok(Expr::new_unary(operator.to_owned(), Box::new(right)))
         } else {
             self.exponential()
         }
     }
 
     fn exponential(&mut self) -> Result<Expr, ParseError> {
-        let left = self.primary()?;
+        let left = self.call()?;
 
-        if let Some(operator) = self.cond_advance(vec![TT::Ast2]) {
+        if let Some(operator) = self.cond_advance(vec![TT::Ast2]).cloned() {
             let save = self.current;
             if let Ok(right) = self.exponential() {
-                Ok(BinaryExpr::new(operator.to_owned(), left, right).into_expr())
+                Ok(Expr::new_binary(
+                    operator.to_owned(),
+                    Box::new(left),
+                    Box::new(right),
+                ))
             } else {
                 self.current = save;
                 let right = self.unary()?;
-                Ok(BinaryExpr::new(operator.to_owned(), left, right).into_expr())
+                Ok(Expr::new_binary(
+                    operator.to_owned(),
+                    Box::new(left),
+                    Box::new(right),
+                ))
             }
         } else {
             Ok(left)
         }
     }
 
+    fn call(&mut self) -> Result<Expr, ParseError> {
+        let mut expr = self.primary()?;
+
+        loop {
+            if self.cond_advance(vec![TT::LParen]).is_some() {
+                expr = self.finish_call(expr)?;
+            } else {
+                break;
+            }
+        }
+
+        return Ok(expr);
+    }
+
+    fn finish_call(&mut self, callee: Expr) -> Result<Expr, ParseError> {
+        let mut arguments = Vec::new();
+
+        if !self.check(TT::RParen) {
+            arguments.push(self.expression()?);
+            while self.cond_advance(vec![TT::Comma]).is_some() {
+                arguments.push(self.expression()?);
+                if arguments.len() > 255 {
+                    Parser::error(
+                        self.peek(),
+                        "Can't have more than 255 arguments.".to_owned(),
+                    );
+                }
+            }
+        }
+
+        let paren = self
+            .consume(TT::RParen, "Expected ')' after arguments.")?
+            .clone();
+
+        Ok(Expr::new_call(Box::new(callee), paren, arguments))
+    }
+
     fn primary(&mut self) -> Result<Expr, ParseError> {
         match self.peek().ttype {
             TT::False => {
                 self.advance();
-                Ok(LiteralExpr::new(Object::Boolean(false)).into_expr())
+                Ok(Expr::new_literal(Object::Boolean(false)))
             }
             TT::True => {
                 self.advance();
-                Ok(LiteralExpr::new(Object::Boolean(true)).into_expr())
+                Ok(Expr::new_literal(Object::Boolean(true)))
             }
             TT::Null => {
                 self.advance();
-                Ok(LiteralExpr::new(Object::Null).into_expr())
+                Ok(Expr::new_literal(Object::Null))
             }
 
             TT::Number | TT::String => {
                 let token = self.advance();
-                Ok(LiteralExpr::new(token.literal.clone().unwrap()).into_expr())
+                Ok(Expr::new_literal(token.literal.clone().unwrap()))
             }
 
             TT::Identifier => {
                 let name = self.advance();
-                Ok(Variable::new(name.to_owned()).into_expr())
+                Ok(Expr::new_variable(name.to_owned()))
             }
 
             TT::LParen => {
                 self.advance();
                 let expr = self.expression()?;
                 self.consume(TT::RParen, "Expected ')' after expression.")?;
-                Ok(GroupingExpr::new(expr).into_expr())
+                Ok(Expr::new_grouping(Box::new(expr)))
             }
-            _ => {
-                Err(Self::error(self.peek(), "Expected expression.".to_owned()))
-            }
+            _ => Err(Self::error(self.peek(), "Expected expression.".to_owned())),
         }
     }
 
@@ -205,7 +411,7 @@ impl Parser {
     fn cond_advance(&mut self, ttypes: Vec<TT>) -> Option<&Token> {
         for ttype in ttypes.into_iter() {
             if self.check(ttype) {
-                return Some(self.advance())
+                return Some(self.advance());
             }
         }
 

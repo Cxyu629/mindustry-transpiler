@@ -1,4 +1,4 @@
-use std::{collections::HashMap, rc::Weak, cell::RefCell};
+use std::{cell::RefCell, collections::HashMap, rc::{Weak, Rc}};
 
 use crate::{error::RuntimeError, token::*};
 
@@ -15,9 +15,9 @@ impl Environment {
         }
     }
 
-    pub fn new_enclosed(enclosing: Weak<RefCell<Environment>>) -> Self {
+    pub fn new_enclosed(enclosing: &Rc<RefCell<Environment>>) -> Self {
         Self {
-            enclosing,
+            enclosing: Rc::downgrade(enclosing),
             values: HashMap::new(),
         }
     }
@@ -40,8 +40,8 @@ impl Environment {
     }
 
     pub fn assign(&mut self, name: Token, value: Object) -> Result<(), RuntimeError> {
-        if let Some(prev_value) = self.values.get_mut(&name.lexeme) {
-            *prev_value = value;
+        if self.values.contains_key(&name.lexeme) {
+            self.values.insert(name.lexeme, value);
             Ok(())
         } else if let Some(enclosing) = self.enclosing.upgrade() {
             enclosing.borrow_mut().assign(name, value)

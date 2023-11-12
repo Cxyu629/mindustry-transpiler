@@ -4,70 +4,52 @@ use crate::{expr::*, stmt::*};
 
 impl fmt::Display for Expr {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.0)
-    }
-}
-
-impl fmt::Display for UnaryExpr {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "({} {})", self.operator.lexeme, self.right)
-    }
-}
-
-impl fmt::Display for BinaryExpr {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "({} {} {})", self.operator.lexeme, self.left, self.right)
-    }
-}
-
-impl fmt::Display for GroupingExpr {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "({})", self.expression)
-    }
-}
-
-impl fmt::Display for LiteralExpr {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.value)
-    }
-}
-
-impl fmt::Display for Variable {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.name.lexeme)
-    }
-}
-
-impl fmt::Display for AssignExpr {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "({} = {})", self.name.lexeme, self.value)
-    }
-}
-
-impl fmt::Display for Stmt {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", self.0)
-    }
-}
-
-impl fmt::Display for ExpressionStmt {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "expr({})", self.expression)
-    }
-}
-
-impl fmt::Display for PrintStmt {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "print({})", self.expression)
-    }
-}
-
-impl fmt::Display for VarStmt {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "var({}", self.name.lexeme)?;
-        if let Some(x) = &self.initialiser {
-            write!(f, ", {x}")?;
+        match self {
+            Expr::Unary { operator, right } => {
+                write!(f, "({} {})", operator.lexeme, right)
+            }
+            Expr::Binary {
+                operator,
+                left,
+                right,
+            } => write!(f, "({} {} {})", operator.lexeme, left, right),
+            Expr::Grouping { expression } => write!(f, "({})", expression),
+            Expr::Literal { value } => write!(f, "{}", value),
+            Expr::Variable { name } => write!(f, "{}", name.lexeme),
+            Expr::Assign { name, value } => write!(f, "({} = {})", name.lexeme, value),
+            Expr::Logical { operator, left, right } => todo!(),
+            Expr::Call { callee, paren, arguments } => todo!(),
         }
-        write!(f, ")")
     }
 }
+
+// impl fmt::Display for Stmt {
+//     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+//         match self {
+//             Stmt::Expression { expression } => write!(f, "expr({})", expression),
+//             Stmt::Print { expression } => write!(f, "print({})", expression),
+//             Stmt::Var { name, initialiser } => {
+//                 write!(f, "var({}", name.lexeme)?;
+//                 if let Some(x) = &initialiser {
+//                     write!(f, ", {x}")?;
+//                 }
+//                 write!(f, ")")
+//             }
+//             Stmt::Block { statements } => {
+//                 write!(f, "{{")?;
+//                 for statement in (&statements).into_iter() {
+//                     f.pad("\n")?;
+//                     statement.fmt(f)?;
+//                 }
+//                 write!(f, "\n}}")
+//             }
+//             Stmt::If {
+//                 condition,
+//                 then_branch,
+//                 else_branch,
+//             } => ,
+//             Stmt::While { condition, body } => todo!(),
+//             Stmt::DoWhile { condition, body } => todo!(),
+//         }
+//     }
+// }

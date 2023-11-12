@@ -1,30 +1,48 @@
 
-Expr = L2
-L2   = L3 (Or L3)*                                             or
-L3   = L4 (And L4)*                                            and
-L4   = L5 ( ( "==" | "!=" | "===" ) L5 )*                      equality
-L5   = L6 ( ( "<" | "<=" | ">" | ">=" ) L6 )*                  relational
-L6   = L7 ("|" L7)*                                            bit_or
-L7   = L8 ("^" L8)*                                            bit_xor
-L8   = L9 ("&" L9)*                                            bit_and
-L9   = L10 ( ( "<<" | ">>" ) L10 )*                            bit_shift
-L10  = L11 ( ( "+" | "-" ) L11 )*                              term
-L11  = L12 ( ( "*" | "/" | "%" | "//" ) L12 )*                 factor
-L12  = (( "+" | "-" | "~" | Not ) L12) | L13                   unary
-L13  = (L14 "**" (L13 | L12)) | L14                            exponential
-L14  = Number | String | Degree | True | False | "(" Expr ")"  literal
+Expr   = Assign
+Assign = L2 "=" Assign
+L2     = L3 (Or L3)*                                             or
+L3     = L4 (And L4)*                                            and
+L4     = L5 ( ( "==" | "!=" | "===" ) L5 )*                      equality
+L5     = L6 ( ( "<" | "<=" | ">" | ">=" ) L6 )*                  relational
+L6     = L7 ("|" L7)*                                            bit_or
+L7     = L8 ("^" L8)*                                            bit_xor
+L8     = L9 ("&" L9)*                                            bit_and
+L9     = L10 ( ( "<<" | ">>" ) L10 )*                            bit_shift
+L10    = L11 ( ( "+" | "-" ) L11 )*                              term
+L11    = L12 ( ( "*" | "/" | "%" | "//" ) L12 )*                 factor
+L12    = (( "+" | "-" | "~" | Not ) L12) | L13                   unary
+L13    = (L14 "**" (L13 | L12)) | L14                            exponential
+L14    = L15 ( "(" arguments? ")" )*                              call
+L15    = Number | String | Degree | True | False | "(" Expr ")"  literal
+
+arguments = expression ( "," expression )* 
 
 
-program = (Statement | Block)* EOF
+program = (Statement)* EOF
 
-Block = "{" Statement* "}"
 
 Statement = ;
+          | Block
           | Class
           | Function
+          | ForStatement
+          | DoWhileStatement
+          | WhileStatement
+          | IfStatement
           | VarStatement
           | PrintStatement
           | ExpressionStatement
+          
+Block = "{" Statement* "}"
+
+ForStatement = "for" "(" ( VarStatement | ExpressionStatement ) `Expr`? ";" `Expr` ")" Block ";"
+
+DoWhileStatement = "do" Block "while" `Expr` ";"
+
+WhileStatement = "while" `Expr` Block ";"
+
+IfStatement = "if" `Expr` Block ( "else" Block )? ";"
 
 VarStatement = `Var` Ident ( "=" `Expr` )? ";"
 
@@ -36,4 +54,4 @@ Class = `class` Ident "{" VarStatement* Function* "}"
 
 FunctionParameter = 
 
-ExpressionStatement = 
+ExpressionStatement = `Expr` ";"

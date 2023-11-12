@@ -1,6 +1,6 @@
 use std::fmt::Display;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Token {
     pub ttype: TokenType,
     pub lexeme: String,
@@ -8,7 +8,7 @@ pub struct Token {
     pub position: Position,
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Position {
     pub ln: usize,
     pub col: usize,
@@ -60,37 +60,64 @@ impl Display for Object {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TokenType {
     // Single character tokens
-    LParen, // (
-    RParen, // )
-    LBrace, // {
-    RBrace, // }
-    Comma,  // ,
-    Dot,    // .
-    Equals, // =
+    /// `(` token.
+    LParen,
+    /// `)` token.
+    RParen,
+    /// `{` token.
+    LBrace,
+    /// `}` token.
+    RBrace,
+    /// `,` token.
+    Comma,
+    /// `.` token.
+    Dot,
+    /// `=` token.
+    Equals,
 
-    Minus,     // -
-    Plus,      // +
-    Semicolon, // ;
-    Slash,     // /
-    Slash2,    // //
-    Ast,       // *
-    Ast2,      // **
-    Percent,   // %
-    LAngle2,   // <<
-    RAngle2,   // >>
-    Amp,       // &
-    Bar,       // |
-    Hat,       // ^
-    Tilde,     // ~
+    /// `-` token.
+    Minus,
+    /// `+` token.
+    Plus,
+    /// `;` token.
+    Semicolon,
+    /// `/` token.
+    Slash,
+    /// `//` token.
+    Slash2,
+    /// `*` token.
+    Ast,
+    /// `**` token.
+    Ast2,
+    /// `%` token.
+    Percent,
+    /// `<<` token.
+    LAngle2,
+    /// `>>` token.
+    RAngle2,
+    /// `&` token.
+    Amp,
+    /// `|` token.
+    Bar,
+    /// `^` token.
+    Hat,
+    /// `~` token.
+    Tilde,
 
-    // Bang,         // !
-    BangEquals,   // !=
-    Equals2,      // ==
-    Equals3,      // ===
-    LAngle,       // <
-    RAngle,       // >
-    LAngleEquals, // <=
-    RAngleEquals, // >=
+    /// `!=` token.
+    BangEquals,
+    /// `==` token.
+    Equals2,
+    /// `===` token.
+    Equals3,
+    /// `<` token.
+    LAngle,
+    /// `>` token.
+    RAngle,
+    /// `<=` token.
+    LAngleEquals,
+    /// `>=` token.
+    RAngleEquals,
 
     // Literals
     Identifier,
@@ -100,6 +127,7 @@ pub enum TokenType {
     Colour,
 
     // Keywords
+    Do,
     While,
     For,
     If,
