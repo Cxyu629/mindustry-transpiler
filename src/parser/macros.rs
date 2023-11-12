@@ -6,10 +6,9 @@ macro_rules! binary {
 
             let mut valid = self.cond_advance(vec![$x$(, $y)*]);
 
-            while valid {
-                let operator = self.previous().to_owned();
+            while let Some(operator) = valid {
                 let right = self.$prev_fun()?.clone();
-                left = BinaryExpr::new(operator, left, right).into_expr();
+                left = BinaryExpr::new(operator.to_owned(), left, right).into_expr();
                 valid = self.cond_advance(vec![$x$(, $y)*]);
             }
             Ok(left)

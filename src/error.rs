@@ -2,13 +2,14 @@ use std::{error, fmt};
 
 use crate::token::{Token, TokenType as TT};
 
+
 #[derive(Debug)]
-pub struct EvaluationError {
+pub struct RuntimeError {
     pub token: Token,
     pub message: String,
 }
 
-impl EvaluationError {
+impl RuntimeError {
     pub fn new(token: &Token, message: String) -> Self {
         Self {
             token: token.to_owned(),
@@ -17,9 +18,9 @@ impl EvaluationError {
     }
 }
 
-impl error::Error for EvaluationError {}
+impl error::Error for RuntimeError {}
 
-impl fmt::Display for EvaluationError {
+impl fmt::Display for RuntimeError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let ln = self.token.position.ln;
         let col = self.token.position.col;
@@ -69,12 +70,38 @@ impl fmt::Display for ParseError {
     }
 }
 
-fn report(ln: usize, col: usize, lexeme: &str, message: &str) {
-    eprintln!("[ln {ln}, col {col}] Error{lexeme}: {message}")
+fn report(ln: usize, col: usize, loc: &str, message: &str) {
+    eprintln!("[ln {ln}, col {col}] Error{loc}: {message}")
 }
 
-pub fn error(ln: usize, col: usize, message: String) {
+pub fn scanning_error(ln: usize, col: usize, message: String) {
     report(ln, col, "", message.as_str())
 
     // TODO: had_error global variable (need to figure it out)
+}
+
+pub fn parsing_error(token: &Token, message: String) {
+    if token.ttype == TT::EOF {
+        report(token.position.ln, token.position.col, " at end", &message)
+    } else {
+        report(
+            token.position.ln,
+            token.position.col,
+            format!(" at '{}'", token.lexeme).as_str(),
+            &message,
+        )
+    }
+}
+
+pub fn runtime_error(token: &Token, message: String) {
+    if token.ttype == TT::EOF {
+        report(token.position.ln, token.position.col, " at end", &message)
+    } else {
+        report(
+            token.position.ln,
+            token.position.col,
+            format!(" at '{}'", token.lexeme).as_str(),
+            &message,
+        )
+    }
 }

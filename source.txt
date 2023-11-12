@@ -1,0 +1,6 @@
+var a = 1;
+var b = 200;
+var x;
+var str = "hello world";
+var str2 = "\nhi";
+print str + str2;

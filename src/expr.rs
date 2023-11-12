@@ -1,14 +1,24 @@
-use std::{cell::RefCell, fmt, rc::Rc};
+use std::{fmt, rc::Rc};
 
 use crate::interpreter;
-use crate::parser;
-use crate::printer;
-use crate::scanner;
+
 use crate::token::{Object, Token};
 
 use self::interpreter::Interpretable;
 
+use crate::expr_like;
+
+// pub trait Visitor<T> {
+//     fn visit_unary(&mut self, expr: UnaryExpr) -> T;
+//     fn visit_binary(&mut self, expr: BinaryExpr) -> T;
+//     fn visit_grouping(&mut self, expr: GroupingExpr) -> T;
+//     fn visit_litera(&mut self, expr: LiteralExpr) -> T;
+//     fn visit_variable(&mut self, expr: Variable) -> T;
+//     fn visit_assign(&mut self, expr: AssignExpr) -> T;
+// }
+
 pub trait ExprLike: fmt::Display + Interpretable {}
+
 pub trait IntoExpr {
     fn into_expr(self) -> Expr;
 }
@@ -16,7 +26,7 @@ pub trait IntoExpr {
 // ========== Expr ==========
 
 #[derive(Clone)]
-pub struct Expr(pub Rc<RefCell<dyn ExprLike>>);
+pub struct Expr(pub Rc<dyn ExprLike>);
 
 impl ExprLike for Expr {}
 
@@ -36,13 +46,7 @@ impl UnaryExpr {
     }
 }
 
-impl ExprLike for UnaryExpr {}
-
-impl IntoExpr for UnaryExpr {
-    fn into_expr(self) -> Expr {
-        Expr(Rc::new(RefCell::new(self)))
-    }
-}
+expr_like! {UnaryExpr}
 
 // ========== Binary ==========
 
@@ -66,13 +70,7 @@ impl BinaryExpr {
     }
 }
 
-impl ExprLike for BinaryExpr {}
-
-impl IntoExpr for BinaryExpr {
-    fn into_expr(self) -> Expr {
-        Expr(Rc::new(RefCell::new(self)))
-    }
-}
+expr_like! {BinaryExpr}
 
 // ========== Grouping ==========
 
@@ -88,13 +86,7 @@ impl GroupingExpr {
     }
 }
 
-impl ExprLike for GroupingExpr {}
-
-impl IntoExpr for GroupingExpr {
-    fn into_expr(self) -> Expr {
-        Expr(Rc::new(RefCell::new(self)))
-    }
-}
+expr_like! {GroupingExpr}
 
 // ===== Literal =====
 
@@ -108,13 +100,7 @@ impl LiteralExpr {
     }
 }
 
-impl ExprLike for LiteralExpr {}
-
-impl IntoExpr for LiteralExpr {
-    fn into_expr(self) -> Expr {
-        Expr(Rc::new(RefCell::new(self)))
-    }
-}
+expr_like! {LiteralExpr}
 
 // ===== VariableExpr =====
 
@@ -127,3 +113,22 @@ impl Variable {
         Self { name }
     }
 }
+
+expr_like! {Variable}
+// ===== AssignExpr =====
+
+pub struct AssignExpr {
+    pub name: Token,
+    pub value: Box<dyn ExprLike>,
+}
+
+impl AssignExpr {
+    pub fn new(name: Token, value: impl ExprLike) -> Self {
+        Self {
+            name,
+            value: Box::new(value),
+        }
+    }
+}
+
+expr_like! {AssignExpr}

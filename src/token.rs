@@ -116,6 +116,7 @@ pub enum TokenType {
     Super,
     Var,
     Not,
+    Print,
 
     // Built-in functions
     Num,

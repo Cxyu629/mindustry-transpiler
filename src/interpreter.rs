@@ -1,26 +1,35 @@
 use std::ops::{Add, BitAnd, BitOr, BitXor, Div, Mul, Rem, Shl, Shr, Sub};
 
 use crate::{
-    error::EvaluationError,
+    environment::Environment,
+    error::{self, RuntimeError},
     expr::*,
     stmt::*,
-    token::{Object as Ob, TokenType as TT},
+    token::{Object as Ob, Token, TokenType as TT},
 };
 
 #[macro_use]
 mod macros;
 
-pub struct Interpreter {}
+pub struct Interpreter {
+    pub environment: Environment,
+}
 
 impl Interpreter {
-    pub fn interpret(statements: Vec<impl Interpretable>) -> bool {
+    pub fn new() -> Self {
+        Self {
+            environment: Environment::new(),
+        }
+    }
+
+    pub fn interpret(&mut self, statements: Vec<impl Interpretable>) -> bool {
         let mut statements_iter = statements.iter();
 
         while let Some(statement) = statements_iter.next() {
-            match (*statement).evaluate() {
-                Ok(value) => println!("{}", value),
+            match (*statement).evaluate(self) {
+                Ok(value) => {}
                 Err(error) => {
-                    println!("{}", &error);
+                    error::runtime_error(&error.token, error.message.to_owned());
                     return false;
                 }
             }
@@ -28,21 +37,26 @@ impl Interpreter {
 
         true
     }
+
+    pub fn error(token: &Token, message: String) -> RuntimeError {
+        // error::runtime_error(token, message.to_owned());
+        RuntimeError::new(token, message)
+    }
 }
 
 pub trait Interpretable {
-    fn evaluate(&self) -> Result<Ob, EvaluationError>;
+    fn evaluate(&self, interpreter: &mut Interpreter) -> Result<Ob, RuntimeError>;
 }
 
 impl Interpretable for Expr {
-    fn evaluate(&self) -> Result<Ob, EvaluationError> {
-        self.0.borrow().evaluate()
+    fn evaluate(&self, interpreter: &mut Interpreter) -> Result<Ob, RuntimeError> {
+        self.0.evaluate(interpreter)
     }
 }
 
 impl Interpretable for UnaryExpr {
-    fn evaluate(&self) -> Result<Ob, EvaluationError> {
-        let eval_right = self.right.evaluate()?;
+    fn evaluate(&self, interpreter: &mut Interpreter) -> Result<Ob, RuntimeError> {
+        let eval_right = self.right.evaluate(interpreter)?;
         match ((self.operator).ttype, &eval_right) {
             (TT::Plus, Ob::Degree(val_right)) => Ok(Ob::Degree(*val_right)),
             (TT::Plus, Ob::Number(val_right)) => Ok(Ob::Number(*val_right)),
@@ -51,12 +65,16 @@ impl Interpretable for UnaryExpr {
             (TT::Tilde, Ob::Number(val_right)) => Ok(Ob::Number(-val_right.floor() - 1.)),
             (TT::Not, Ob::Boolean(val_right)) => Ok(Ob::Boolean(!val_right)),
             (TT::Plus | TT::Minus | TT::Tilde | TT::Not, Ob::Null) => Ok(Ob::Null),
-            (TT::Plus | TT::Minus | TT::Tilde | TT::Not, _) => Err(EvaluationError::new(
+            (TT::Plus | TT::Minus | TT::Tilde | TT::Not, _) => Err(Interpreter::error(
                 &self.operator,
-                un_err_msg!(self.operator, eval_right),
+                format!(
+                    "Operand type `{}` is invalid for operator '{}'.",
+                    eval_right.dtype(),
+                    (self.operator).lexeme,
+                ),
             )),
             _ => panic!(
-                "Unexpected {} in unary evaluation, should not occur.",
+                "Unexpected operator '{}' in unary evaluation, should not occur.",
                 self.operator.lexeme
             ),
         }
@@ -64,9 +82,9 @@ impl Interpretable for UnaryExpr {
 }
 
 impl Interpretable for BinaryExpr {
-    fn evaluate(&self) -> Result<Ob, EvaluationError> {
-        let eval_left = self.left.evaluate()?;
-        let eval_right = self.right.evaluate()?;
+    fn evaluate(&self, interpreter: &mut Interpreter) -> Result<Ob, RuntimeError> {
+        let eval_left = self.left.evaluate(interpreter)?;
+        let eval_right = self.right.evaluate(interpreter)?;
 
         use Ob::*;
         match self.operator.ttype {
@@ -164,31 +182,63 @@ impl Interpretable for BinaryExpr {
 }
 
 impl Interpretable for GroupingExpr {
-    fn evaluate(&self) -> Result<Ob, EvaluationError> {
-        self.expression.evaluate()
+    fn evaluate(&self, interpreter: &mut Interpreter) -> Result<Ob, RuntimeError> {
+        self.expression.evaluate(interpreter)
     }
 }
 
 impl Interpretable for LiteralExpr {
-    fn evaluate(&self) -> Result<Ob, EvaluationError> {
+    fn evaluate(&self, _interpreter: &mut Interpreter) -> Result<Ob, RuntimeError> {
         Ok(self.value.to_owned())
     }
 }
 
+impl Interpretable for Variable {
+    fn evaluate(&self, interpreter: &mut Interpreter) -> Result<Ob, RuntimeError> {
+        interpreter.environment.get(&self.name)
+    }
+}
+
+impl Interpretable for AssignExpr {
+    fn evaluate(&self, interpreter: &mut Interpreter) -> Result<Ob, RuntimeError> {
+        todo!()
+    }
+}
+
+// ========== Statements ==========
+
 impl Interpretable for Stmt {
-    fn evaluate(&self) -> Result<Ob, EvaluationError> {
-        self.0.borrow().evaluate()
+    fn evaluate(&self, interpreter: &mut Interpreter) -> Result<Ob, RuntimeError> {
+        self.0.evaluate(interpreter)
     }
 }
 
 impl Interpretable for ExpressionStmt {
-    fn evaluate(&self) -> Result<Ob, EvaluationError> {
-        self.expression.evaluate()
+    fn evaluate(&self, interpreter: &mut Interpreter) -> Result<Ob, RuntimeError> {
+        self.expression.evaluate(interpreter)
+    }
+}
+
+impl Interpretable for PrintStmt {
+    fn evaluate(&self, interpreter: &mut Interpreter) -> Result<Ob, RuntimeError> {
+        let value = self.expression.evaluate(interpreter)?;
+        println!("{}", value);
+        Ok(Ob::Null)
     }
 }
 
 impl Interpretable for VarStmt {
-    fn evaluate(&self) -> Result<Ob, EvaluationError> {
-        todo!()
+    fn evaluate(&self, interpreter: &mut Interpreter) -> Result<Ob, RuntimeError> {
+        let value = if let Some(expr) = &self.initialiser {
+            expr.evaluate(interpreter)?
+        } else {
+            Ob::Null
+        };
+
+        interpreter
+            .environment
+            .define(self.name.lexeme.to_owned(), value);
+
+        Ok(Ob::Null)
     }
 }

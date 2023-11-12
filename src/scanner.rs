@@ -1,7 +1,9 @@
 use std::collections::HashMap;
 use std::default;
 
-use crate::error::error;
+use snailquote::unescape;
+
+use crate::error::scanning_error;
 use crate::token::Object;
 use crate::token::Position;
 use crate::token::Token;
@@ -11,6 +13,7 @@ use crate::token::TokenType as TT;
 pub struct Scanner {
     source: Vec<u8>,
     tokens: Vec<Token>,
+    offset: usize,
     start: usize,
     startln: usize,
     current: usize,
@@ -22,6 +25,7 @@ impl default::Default for Scanner {
         Self {
             source: vec![],
             tokens: vec![],
+            offset: 0,
             start: 0,
             startln: 1,
             current: 0,
@@ -138,7 +142,10 @@ impl Scanner {
                     (' ', _) => {}
                     ('\r', _) => {}
                     ('\t', _) => {}
-                    ('\n', _) => self.ln += 1,
+                    ('\n', _) => {
+                        self.ln += 1;
+                        self.offset = self.current;
+                    }
 
                     ('"', _) => {
                         self.string();
@@ -150,15 +157,21 @@ impl Scanner {
                         } else if c.is_ascii_alphabetic() || c == '_' {
                             self.identifier();
                         } else {
-                            error(self.ln, self.start + 1, "Unexpected character.".to_owned())
+                            scanning_error(
+                                self.ln,
+                                self.current - self.offset + 1,
+                                "Unexpected character.".to_owned(),
+                            )
                         }
                     }
                 }
             }
         }
 
-        self.tokens
-            .push(Token::eof(Position::new(self.ln, self.current + 1)));
+        self.tokens.push(Token::eof(Position::new(
+            self.ln,
+            self.current - self.offset + 1,
+        )));
 
         self.tokens.clone()
     }
@@ -181,6 +194,7 @@ impl Scanner {
         keywords.insert("this", TT::This);
         keywords.insert("super", TT::Super);
         keywords.insert("var", TT::Var);
+        keywords.insert("print", TT::Print);
 
         keywords.insert("num", TT::Num);
         keywords.insert("deg", TT::Deg);
@@ -220,6 +234,13 @@ impl Scanner {
     }
 
     fn number(&mut self) {
+        let ttype: TT;
+        let lexeme: String;
+        let literal: Option<Object>;
+        let position: Position;
+
+        position = Position::new(self.startln, self.current - self.offset);
+
         while self.peek().is_ascii_digit() {
             self.advance();
         }
@@ -231,13 +252,6 @@ impl Scanner {
                 self.advance();
             }
         }
-
-        let ttype: TT;
-        let lexeme: String;
-        let literal: Option<Object>;
-        let position: Position;
-
-        position = Position::new(self.startln, self.start + 1);
 
         if self.peek() == 'd'
             && self.peek_next() == 'e'
@@ -276,24 +290,36 @@ impl Scanner {
     fn string(&mut self) {
         while self.peek() != '"' && !self.is_at_end() {
             if self.peek() == '\n' {
-                self.ln += 1
-            };
+                self.ln += 1;
+                // self.offset = self.current;
+            }
             self.advance();
         }
 
         if self.is_at_end() {
-            error(self.ln, self.current, "Unterminated string.".to_owned());
+            scanning_error(
+                self.ln,
+                self.current - self.offset + 1,
+                "Unterminated string.".to_owned(),
+            );
         } else {
             self.advance();
             let lexeme =
-                String::from_utf8(self.source[(self.start + 1)..(self.current - 1)].into())
-                    .unwrap();
-            let position = Position::new(self.startln, self.start + 1);
+                String::from_utf8(self.source[(self.start)..(self.current)].into()).unwrap();
+            let position = Position::new(self.startln, self.start - self.offset + 1);
+            let literal = Some(Object::String(unescape(&lexeme).unwrap_or_else(|x| {
+                scanning_error(
+                    self.ln,
+                    self.start - self.offset + 1,
+                    "Unexpected escape character.".to_owned(),
+                );
+                "".to_owned()
+            })));
 
             self.tokens.push(Token {
                 ttype: TT::String,
                 lexeme,
-                literal: None,
+                literal,
                 position,
             })
         }
@@ -301,7 +327,7 @@ impl Scanner {
 
     fn add_token(&mut self, ty: TT) {
         let text = String::from_utf8(self.source[self.start..self.current].into()).unwrap();
-        let position = Position::new(self.startln, self.start + 1);
+        let position = Position::new(self.startln, self.start - self.offset + 1);
         self.tokens.push(Token {
             ttype: ty,
             lexeme: text,

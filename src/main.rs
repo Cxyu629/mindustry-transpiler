@@ -1,15 +1,24 @@
 use mindustry_transpiler::{
     expr::*,
     run,
-    token::{Object, Position, Token, TokenType as TT},
+    token::{Object, Position, Token, TokenType as TT}, run_file,
 };
+use snailquote::unescape;
 
 fn main() {
-    let source = r#"3**--null**-1"#.to_owned();
 
-    if let Err(error) = run(source.into_bytes()) {
-        // println!("{}", error);
-    };
+    let s = r#""hell\no""#;
+    let n = unescape(s).unwrap();
+    println!("{n}", );
+    println!("{}", unescape("\"new\\nline\"").unwrap());
+
+    // let source = r#"3**--1**-1;"#.to_owned();
+
+    // if let Err(_error) = run(source.into_bytes()) {
+    //     // println!("{}", error);
+    // };
+
+    run_file("source.txt");
 
     // Expr expression = new Expr.Binary(
     //     new Expr.Unary(
