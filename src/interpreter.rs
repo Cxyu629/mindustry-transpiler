@@ -5,13 +5,17 @@ use std::{
 };
 
 use crate::{
-    callable::Callable,
+    callable::TryCallable,
     environment::Environment,
     error::{self, RuntimeError},
     expr::*,
+    function::{self, run_inner},
     stmt::*,
-    token::{Object as Ob, Token, TokenType as TT},
+    token::{Object, Token, TokenType},
 };
+
+use Object as Ob;
+use TokenType as TT;
 
 #[macro_use]
 mod macros;
@@ -28,19 +32,47 @@ impl Interpreter {
             globals: Rc::new(RefCell::new(Environment::new())),
         };
 
-        // me.globals.borrow_mut().define("clock".to_owned(), Callable {});
+        me.globals.borrow_mut().define(
+            "clock".to_owned(),
+            Ob::Function {
+                call: function::clock,
+                arity: 0,
+                params: vec![],
+                statement: None,
+                outer_environment: None,
+            },
+        );
+        // me.globals.borrow_mut().define(
+        //     "deg".to_owned(),
+        //     Ob::Function {
+        //         call: function::deg,
+        //         arity: 1,
+        //         params: vec![Token {
+        //             ttype: TT::Identifier,
+        //             lexeme: "number".to_owned(),
+        //             literal: None,
+        //             position: todo!(),
+        //         }],
+        //         statement: None,
+        //         outer_environment: None,
+        //     },
+        // );
 
         me
     }
 
     pub fn interpret(&mut self, statements: Vec<Stmt>) -> bool {
-        let mut environment = Rc::new(RefCell::new(Environment::new()));
+        let mut environment = Rc::new(RefCell::new(Environment::new_enclosed(&self.globals)));
 
         let mut statements_iter = statements.iter();
 
         while let Some(statement) = statements_iter.next() {
             match self.execute(&mut environment, statement) {
-                Ok(_value) => {}
+                Ok(value) => {
+                    if let Ob::Return { .. } = value {
+                        todo!()
+                    }
+                }
                 Err(error) => {
                     error::runtime_error(&error.token, error.message.to_owned());
                     return false;
@@ -53,7 +85,7 @@ impl Interpreter {
 
     pub fn evaluate(
         &mut self,
-        environment: &mut Rc<RefCell<Environment>>,
+        environment: &Rc<RefCell<Environment>>,
         expression: &Expr,
     ) -> Result<Ob, RuntimeError> {
         match expression {
@@ -189,7 +221,7 @@ impl Interpreter {
                 }
             }
             Expr::Grouping { expression } => self.evaluate(environment, expression),
-            Expr::Literal { value } => Ok(value.to_owned()),
+            Expr::Literal { value } => Ok(value.clone()),
             Expr::Variable { name } => environment.borrow().get(&name),
             Expr::Assign { name, value } => {
                 let new_value = self.evaluate(environment, value)?;
@@ -230,35 +262,50 @@ impl Interpreter {
                 paren,
                 arguments,
             } => {
-                todo!();
-                // let callee = self.evaluate(environment, &callee)?;
+                let callee = self.evaluate(environment, &callee)?;
 
-                // let argument_values = Vec::new();
-                // for argument in arguments {
-                //     argument_values.push(self.evaluate(environment, argument)?);
-                // }
+                let mut argument_values = Vec::new();
+                for argument in arguments {
+                    argument_values.push(self.evaluate(environment, argument)?);
+                }
 
-                // let function;
+                if let Some(function) = callee.try_callable() {
+                    if arguments.len() != function.arity {
+                        return Err(Interpreter::error(
+                            paren,
+                            format!(
+                                "Expected {} arguments, but got {} instead.",
+                                function.arity,
+                                arguments.len()
+                            ),
+                        ));
+                    }
 
-                // if arguments.len() != function.arity() {
-                //     return Err(Interpreter::error(
-                //         paren,
-                //         format!(
-                //             "Expected {} arguments, but got {} instead.",
-                //             function.arity(),
-                //             arguments.len()
-                //         ),
-                //     ));
-                // }
+                    let function_environment =
+                        function.outer_environment.unwrap_or(environment.to_owned());
 
-                // return function.call(self, arguments)?;
+                    (function.call)(
+                        self,
+                        function_environment,
+                        &function.params,
+                        argument_values,
+                        &function
+                            .statement
+                            .unwrap_or(Box::new(Stmt::new_block(vec![]))),
+                    )
+                } else {
+                    Err(RuntimeError {
+                        token: paren.clone(),
+                        message: "Can only call functions and classes.".to_owned(),
+                    })
+                }
             }
         }
     }
 
     pub fn execute(
         &mut self,
-        environment: &mut Rc<RefCell<Environment>>,
+        environment: &Rc<RefCell<Environment>>,
         statement: &Stmt,
     ) -> Result<Ob, RuntimeError> {
         match statement {
@@ -269,17 +316,16 @@ impl Interpreter {
                 Ok(Ob::Null)
             }
             Stmt::Var { name, initialiser } => {
-                let value = if let Some(expr) = &initialiser {
-                    self.evaluate(environment, &expr)?
-                } else {
-                    Ob::Null
+                let value = match &initialiser {
+                    Some(expr) => self.evaluate(environment, &expr)?,
+                    _ => Ob::Null,
                 };
 
                 environment
                     .borrow_mut()
-                    .define(name.lexeme.to_owned(), value);
+                    .define(name.lexeme.to_owned(), value.clone());
 
-                Ok(Ob::Null)
+                Ok(value)
             }
             Stmt::Block { statements } => self.execute_block(environment, statements.to_vec()),
             Stmt::If {
@@ -288,55 +334,76 @@ impl Interpreter {
                 else_branch,
             } => {
                 if let Ok(Ob::Boolean(result)) = self.evaluate(environment, &condition) {
+                    let mut value = Ob::Null;
                     if result {
-                        self.execute(environment, then_branch)?;
-                    } else {
-                        if let Some(else_body) = else_branch {
-                            self.execute(environment, else_body)?;
-                        }
+                        value = self.execute(environment, then_branch)?;
+                    } else if let Some(else_branch) = else_branch {
+                        value = self.execute(environment, else_branch)?;
                     }
-                    Ok(Ob::Null)
+
+                    Ok(value)
                 } else {
                     todo!()
                     // Err(Interpreter::error(, "Expected boolean condition."))
                 }
             }
             Stmt::While { condition, body } => {
+                let mut value = Ob::Null;
                 while let Ob::Boolean(true) = self.evaluate(environment, &condition)? {
-                    self.execute(environment, body)?;
+                    value = self.execute(environment, body)?;
+                    if let Ob::Return { .. } = value {
+                        return Ok(value);
+                    }
                 }
 
-                Ok(Ob::Null)
+                Ok(value)
             }
-            Stmt::DoWhile { condition, body } => {
-                self.execute(environment, body)?;
-                while let Ob::Boolean(true) = self.evaluate(environment, &condition)? {
-                    self.execute(environment, body)?;
-                }
-
-                Ok(Ob::Null)
+            Stmt::Function { name, params, body } => {
+                let function = Ob::Function {
+                    call: run_inner,
+                    arity: params.len(),
+                    params: params.to_owned(),
+                    statement: Some(body.to_owned()),
+                    outer_environment: Some(environment.to_owned()),
+                };
+                environment
+                    .borrow_mut()
+                    .define(name.lexeme.clone(), function.to_owned());
+                Ok(function)
             }
+            Stmt::Return { value, .. } => match value {
+                Some(value) => Ok(Ob::Return {
+                    value: Box::new(self.evaluate(environment, value)?),
+                }),
+                None => Ok(Ob::Return {
+                    value: Box::new(Ob::Null),
+                }),
+            },
+            Stmt::Blank {} => Ok(Ob::Null),
         }
     }
 
     pub fn execute_block(
         &mut self,
-        environment: &mut Rc<RefCell<Environment>>,
+        environment: &Rc<RefCell<Environment>>,
         statements: Vec<Stmt>,
         // env: Environment,
     ) -> Result<Ob, RuntimeError> {
-        // let previous = env;
+        let mut value: Ob = Ob::Null;
         {
-            let mut new_env = Rc::new(RefCell::new(Environment::new_enclosed(&environment)));
+            let new_env = Rc::new(RefCell::new(Environment::new_enclosed(&environment)));
 
             let mut statements_iter = statements.iter();
 
             while let Some(statement) = statements_iter.next() {
-                self.execute(&mut new_env, &statement)?;
+                value = self.execute(&new_env, &statement)?;
+                if let Ob::Return { .. } = value {
+                    return Ok(value);
+                }
             }
         }
 
-        Ok(Ob::Null)
+        Ok(value)
     }
 
     pub fn error(token: &Token, message: String) -> RuntimeError {

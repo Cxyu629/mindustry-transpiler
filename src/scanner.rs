@@ -9,7 +9,7 @@ use crate::token::Position;
 use crate::token::Token;
 use crate::token::TokenType as TT;
 
-#[derive(Clone)]
+// #[derive(Clone)]
 pub struct Scanner {
     source: Vec<u8>,
     tokens: Vec<Token>,
@@ -160,7 +160,7 @@ impl Scanner {
                             scanning_error(
                                 self.ln,
                                 self.current - self.offset + 1,
-                                "Unexpected character.".to_owned(),
+                                format!("Unexpected character '{c}'.").to_owned(),
                             )
                         }
                     }
@@ -225,10 +225,9 @@ impl Scanner {
         }
 
         let lexeme: Vec<u8> = self.source[self.start..self.current].into();
-        let ty = if let Some(ty) = keywords.get(&(String::from_utf8(lexeme).unwrap().as_str())) {
-            *ty
-        } else {
-            TT::Identifier
+        let ty = match keywords.get(&(String::from_utf8(lexeme).unwrap().as_str())) {
+            Some(ty) => *ty,
+            None => TT::Identifier,
         };
 
         self.add_token(ty)
@@ -264,18 +263,16 @@ impl Scanner {
             self.advance();
 
             lexeme = String::from_utf8(self.source[self.start..self.current].into()).unwrap();
-            literal = if let Ok(value) = lexeme[0..(lexeme.len() - 3)].parse::<f32>() {
-                Some(Object::Degree(value))
-            } else {
-                None
+            literal = match lexeme[0..(lexeme.len() - 3)].parse::<f32>() {
+                Ok(value) => Some(Object::Degree(value)),
+                Err(_) => None,
             };
             ttype = TT::Degree;
         } else {
             lexeme = String::from_utf8(self.source[self.start..self.current].into()).unwrap();
-            literal = if let Ok(value) = lexeme.parse::<f32>() {
-                Some(Object::Number(value))
-            } else {
-                None
+            literal = match lexeme.parse::<f32>() {
+                Ok(value) => Some(Object::Number(value)),
+                Err(_) => None,
             };
             ttype = TT::Number;
         }
@@ -308,7 +305,7 @@ impl Scanner {
             let lexeme =
                 String::from_utf8(self.source[(self.start)..(self.current)].into()).unwrap();
             let position = Position::new(self.startln, self.start - self.offset + 1);
-            let literal = Some(Object::String(unescape(&lexeme).unwrap_or_else(|x| {
+            let literal = Some(Object::String(unescape(&lexeme).unwrap_or_else(|_| {
                 scanning_error(
                     self.ln,
                     self.start - self.offset + 1,
@@ -347,14 +344,15 @@ impl Scanner {
     }
 
     fn cond_advance(&mut self, expected: char) -> bool {
-        if let Some(c) = self.source.get(self.current) {
-            if *c as char != expected {
-                return false;
-            }
+        match self.source.get(self.current) {
+            Some(c) => {
+                if *c as char != expected {
+                    return false;
+                }
 
-            self.current += 1;
-        } else {
-            return false;
+                self.current += 1;
+            }
+            None => return false,
         }
 
         return true;

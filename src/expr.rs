@@ -4,25 +4,19 @@ use crate::token::{Object, Token};
 mod macros {
     macro_rules! expr {
         {$([$name: ident, $func: ident, [$($field: tt: $t: ty, )+]], )+} => {
-            #[derive(Clone, PartialEq)]
+            #[derive(Clone, Debug)]
             pub enum Expr {
                 $($name {
-                    $(
-                        $field: $t,
-                    )+
+                    $($field: $t,)+
                 },)+
             }
 
             impl Expr {
-                $(
-                    pub fn $func($($field: $t, )+) -> Expr {
-                        Expr::$name {
-                            $(
-                                $field,
-                            )+
-                        }
+                $(pub fn $func($($field: $t, )+) -> Expr {
+                    Expr::$name {
+                        $($field,)+
                     }
-                )+
+                })+
             }
         };
     }
@@ -38,3 +32,21 @@ expr! {
     [Variable, new_variable, [name: Token,]],
     [Assign, new_assign, [name: Token, value: Box<Expr>,]],
 }
+
+// impl Expr {
+
+//     fn try_callable(self) -> Result<CCallable, anyhow::Error> {
+//         match self {
+//             Expr::Call {
+//                 callee,
+//                 paren,
+//                 arguments,
+//             } => Ok(CCallable {
+//                 callee,
+//                 paren,
+//                 arguments,
+//             }),
+//             _ => Err(anyhow::Error::msg("Hi")),
+//         }
+//     }
+// }

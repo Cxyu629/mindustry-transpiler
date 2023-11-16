@@ -1,6 +1,14 @@
-use std::fmt::Display;
+use std::{cell::RefCell, fmt::Display, rc::Rc};
 
-#[derive(Debug, Clone, PartialEq)]
+use crate::{
+    callable::{CCallable, TryCallable},
+    environment::Environment,
+    error::RuntimeError,
+    interpreter::Interpreter,
+    stmt::Stmt,
+};
+
+#[derive(Debug, Clone)]
 pub struct Token {
     pub ttype: TokenType,
     pub lexeme: String,
@@ -14,12 +22,28 @@ pub struct Position {
     pub col: usize,
 }
 
-#[derive(Debug, Clone, PartialEq, PartialOrd)]
+#[derive(Clone, Debug)]
 pub enum Object {
     Number(f32),
     Degree(f32),
     String(String),
     Boolean(bool),
+    Function {
+        params: Vec<Token>,
+        statement: Option<Box<Stmt>>,
+        call: fn(
+            &mut Interpreter,
+            Rc<RefCell<Environment>>,
+            &Vec<Token>,
+            Vec<Object>,
+            &Stmt,
+        ) -> Result<Object, RuntimeError>,
+        arity: usize,
+        outer_environment: Option<Rc<RefCell<Environment>>>,
+    },
+    Return {
+        value: Box<Object>,
+    },
     Null,
 }
 
@@ -30,17 +54,27 @@ impl Object {
             Object::Degree(_) => "Degree",
             Object::String(_) => "String",
             Object::Boolean(_) => "Boolean",
+            Object::Function { .. } => "Function",
             Object::Null => "Null",
+            Object::Return { .. } => "Return",
         }
     }
 
-    pub fn coerce(&self) -> Self {
+    pub fn coerce(&self) -> f32 {
         match self {
-            Object::Number(x) => Object::Number(*x),
-            Object::Degree(x) => Object::Number(*x),
-            Object::String(_) => Object::Number(1.),
-            Object::Boolean(x) => Object::Number(if *x { 1. } else { 0. }),
-            Object::Null => Object::Number(0.),
+            Object::Number(x) => *x,
+            Object::Degree(x) => *x,
+            Object::String(_) => 1.,
+            Object::Boolean(x) => {
+                if *x {
+                    1.
+                } else {
+                    0.
+                }
+            }
+            Object::Function { .. } => 1.,
+            Object::Null => 0.,
+            Object::Return { value } => value.coerce(),
         }
     }
 }
@@ -52,7 +86,30 @@ impl Display for Object {
             Object::Degree(value) => write!(f, "{value}deg"),
             Object::String(value) => write!(f, "{value}"),
             Object::Boolean(value) => write!(f, "{value}"),
+            Object::Function { .. } => write!(f, "<function>"),
             Object::Null => write!(f, "null"),
+            Object::Return { value } => write!(f, "return {}", value),
+        }
+    }
+}
+
+impl TryCallable for Object {
+    fn try_callable(self) -> Option<CCallable> {
+        match self {
+            Object::Function {
+                params,
+                statement,
+                call,
+                arity,
+                outer_environment,
+            } => Some(CCallable {
+                params,
+                statement,
+                call,
+                arity,
+                outer_environment,
+            }),
+            _ => None,
         }
     }
 }

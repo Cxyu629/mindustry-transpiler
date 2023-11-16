@@ -1,7 +1,12 @@
-use std::{cell::RefCell, collections::HashMap, rc::{Weak, Rc}};
+use std::{
+    cell::RefCell,
+    collections::HashMap,
+    rc::{Rc, Weak},
+};
 
 use crate::{error::RuntimeError, token::*};
 
+#[derive(Debug)]
 pub struct Environment {
     enclosing: Weak<RefCell<Environment>>,
     values: HashMap<String, Object>,

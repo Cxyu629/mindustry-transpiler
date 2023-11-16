@@ -1,11 +1,9 @@
-use mindustry_transpiler::{run, run_file};
+use mindustry_transpiler::{run_file, run_prompt};
 
 fn main() {
     // let source = r#"3**--1**-1;"#.to_owned();
 
-    // if let Err(_error) = run(source.into_bytes()) {
-    //     // println!("{}", error);
-    // };
+    // run_prompt();
 
     let _ = run_file("source.txt");
 

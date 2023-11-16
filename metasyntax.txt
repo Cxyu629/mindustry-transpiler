@@ -22,7 +22,7 @@ arguments = expression ( "," expression )*
 program = (Statement)* EOF
 
 
-Statement = ;
+Statement = ";"
           | Block
           | Class
           | Function
@@ -36,13 +36,13 @@ Statement = ;
           
 Block = "{" Statement* "}"
 
-ForStatement = "for" "(" ( VarStatement | ExpressionStatement ) `Expr`? ";" `Expr` ")" Block ";"
+ForStatement = "for" "(" ( VarStatement | ExpressionStatement ) `Expr`? ";" `Expr` ")" Block 
 
 DoWhileStatement = "do" Block "while" `Expr` ";"
 
-WhileStatement = "while" `Expr` Block ";"
+WhileStatement = "while" `Expr` Block 
 
-IfStatement = "if" `Expr` Block ( "else" Block )? ";"
+IfStatement = "if" `Expr` Block ( "else" Block )? 
 
 VarStatement = `Var` Ident ( "=" `Expr` )? ";"
 
@@ -51,7 +51,5 @@ PrintStatement = `Print` `Expr` ";"
 Function = `fun` Ident "(" (Ident ":" Type ("," Ident: Type )* )? ")" Block
 
 Class = `class` Ident "{" VarStatement* Function* "}"
-
-FunctionParameter = 
 
 ExpressionStatement = `Expr` ";"

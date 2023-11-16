@@ -1,6 +1,7 @@
 use crate::{
     error::{self, ParseError},
     expr::*,
+    interpreter::Interpreter,
     stmt::*,
     token::{Object, Token, TokenType as TT},
 };
@@ -66,16 +67,16 @@ impl Parser {
     fn statement(&mut self) -> Result<Stmt, ParseError> {
         // TODO: other kinds of statements
 
-        let mut next = self.peek();
+        let next = self.peek();
 
         if next.ttype == TT::Semicolon {
-            self.advance();
-            next = self.peek();
-        }
-        if next.ttype == TT::LBrace {
+            self.blank_statement()
+        } else if next.ttype == TT::LBrace {
             self.block_statement()
-        // } else if let Some(_) = self.cond_advance(vec![TT::Var]) {
-        //     self.var_statement()
+        } else if next.ttype == TT::Return {
+            self.return_statement()
+        } else if next.ttype == TT::Fun {
+            self.function_statement()
         } else if next.ttype == TT::For {
             self.for_statement()
         } else if next.ttype == TT::Do {
@@ -93,6 +94,11 @@ impl Parser {
         }
     }
 
+    fn blank_statement(&mut self) -> Result<Stmt, ParseError> {
+        self.advance();
+        Ok(Stmt::Blank {})
+    }
+
     fn block_statement(&mut self) -> Result<Stmt, ParseError> {
         self.advance();
 
@@ -105,6 +111,51 @@ impl Parser {
         self.consume(TT::RBrace, "Expected '}' after block.")?;
 
         Ok(Stmt::new_block(statements))
+    }
+
+    fn return_statement(&mut self) -> Result<Stmt, ParseError> {
+        let keyword = self.advance().clone();
+        let mut value = None;
+        if !self.check(TT::Semicolon) {
+            value = Some(self.expression()?);
+        }
+
+        self.consume(TT::Semicolon, "Expected ';' after return value.")?;
+        Ok(Stmt::new_return(keyword, value))
+    }
+
+    fn function_statement(&mut self) -> Result<Stmt, ParseError> {
+        self.advance();
+
+        let name = self
+            .consume(TT::Identifier, "Expected function name.")?
+            .clone();
+        self.consume(TT::LParen, "Expected '(' after function name")?;
+        let mut parameters: Vec<Token> = Vec::new();
+        if !self.check(TT::RParen) {
+            parameters.push(
+                self.consume(TT::Identifier, "Expected parameter name.")?
+                    .clone(),
+            );
+            while self.cond_advance(vec![TT::Comma]).is_some() {
+                parameters.push(
+                    self.consume(TT::Identifier, "Expected parameter name.")?
+                        .clone(),
+                );
+                if parameters.len() > 255 {
+                    Interpreter::error(
+                        &self.peek().clone(),
+                        "Can't have more than 255 parameters.".to_owned(),
+                    );
+                }
+            }
+        }
+
+        self.consume(TT::RParen, "Expected ')' after parameters.")?;
+
+        let body = self.block_statement()?;
+
+        Ok(Stmt::new_function(name.clone(), parameters, Box::new(body)))
     }
 
     fn for_statement(&mut self) -> Result<Stmt, ParseError> {
@@ -157,7 +208,9 @@ impl Parser {
 
         self.consume(TT::Semicolon, "Expected ';' after loop condition.")?;
 
-        Ok(Stmt::new_do_while(condition, body))
+        let body = Stmt::new_block(vec![*body.clone(), Stmt::new_while(condition, body)]);
+
+        Ok(body)
     }
 
     fn while_statement(&mut self) -> Result<Stmt, ParseError> {
@@ -165,7 +218,7 @@ impl Parser {
         let condition = self.expression()?;
         let body = Box::new(self.block_statement()?);
 
-        self.consume(TT::Semicolon, "Expected ';' after while loop.")?;
+        // self.consume(TT::Semicolon, "Expected ';' after while loop.")?;
 
         Ok(Stmt::new_while(condition, body))
     }
@@ -183,7 +236,7 @@ impl Parser {
             else_branch = None
         }
 
-        self.consume(TT::Semicolon, "Expected ';' after if statement.")?;
+        // self.consume(TT::Semicolon, "Expected ';' after if statement.")?;
 
         Ok(Stmt::new_if(condition, then_branch, else_branch))
     }
@@ -195,8 +248,8 @@ impl Parser {
             .consume(TT::Identifier, "Expected variable name.")?
             .to_owned();
         let mut initialiser = None;
-        if let Some(_) = self.cond_advance(vec![TT::Equals]) {
-            initialiser = Some(self.primary()?);
+        if self.cond_advance(vec![TT::Equals]).is_some() {
+            initialiser = Some(self.expression()?);
         }
 
         self.consume(TT::Semicolon, "Expected ';' after variable declaration.")?;
@@ -226,10 +279,13 @@ impl Parser {
         if let Some(equals) = self.cond_advance(vec![TT::Equals]).cloned() {
             let value = self.assignment()?;
 
-            if let Expr::Variable { name } = &expr {
-                return Ok(Expr::new_assign(name.to_owned(), Box::new(value)));
-            } else {
-                Parser::error(&equals, "Invalid assigment target.".to_owned());
+            match &expr {
+                Expr::Variable { name } => {
+                    return Ok(Expr::new_assign(name.to_owned(), Box::new(value)))
+                }
+                _ => {
+                    Parser::error(&equals, "Invalid assigment target.".to_owned());
+                }
             }
         }
 
@@ -267,39 +323,42 @@ impl Parser {
     binary!((factor, unary, [h TT::Ast, TT::Slash, TT::Percent, TT::Slash2]));
 
     fn unary(&mut self) -> Result<Expr, ParseError> {
-        if let Some(operator) = self
+        match self
             .cond_advance(vec![TT::Plus, TT::Minus, TT::Tilde, TT::Not])
             .cloned()
         {
-            let right = self.unary()?;
-            Ok(Expr::new_unary(operator.to_owned(), Box::new(right)))
-        } else {
-            self.exponential()
+            Some(operator) => {
+                let right = self.unary()?;
+                Ok(Expr::new_unary(operator.to_owned(), Box::new(right)))
+            }
+            None => self.exponential(),
         }
     }
 
     fn exponential(&mut self) -> Result<Expr, ParseError> {
         let left = self.call()?;
 
-        if let Some(operator) = self.cond_advance(vec![TT::Ast2]).cloned() {
-            let save = self.current;
-            if let Ok(right) = self.exponential() {
-                Ok(Expr::new_binary(
-                    operator.to_owned(),
-                    Box::new(left),
-                    Box::new(right),
-                ))
-            } else {
-                self.current = save;
-                let right = self.unary()?;
-                Ok(Expr::new_binary(
-                    operator.to_owned(),
-                    Box::new(left),
-                    Box::new(right),
-                ))
+        match self.cond_advance(vec![TT::Ast2]).cloned() {
+            Some(operator) => {
+                let save = self.current;
+                match self.exponential() {
+                    Ok(right) => Ok(Expr::new_binary(
+                        operator.to_owned(),
+                        Box::new(left),
+                        Box::new(right),
+                    )),
+                    Err(_) => {
+                        self.current = save;
+                        let right = self.unary()?;
+                        Ok(Expr::new_binary(
+                            operator.to_owned(),
+                            Box::new(left),
+                            Box::new(right),
+                        ))
+                    }
+                }
             }
-        } else {
-            Ok(left)
+            None => Ok(left),
         }
     }
 
@@ -381,6 +440,7 @@ impl Parser {
         while !self.is_at_end() {
             match self.previous().ttype {
                 TT::Semicolon => return,
+                TT::RBrace => return,
                 _ => {}
             }
 

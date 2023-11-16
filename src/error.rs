@@ -1,8 +1,8 @@
-use std::{error, fmt};
+use std::fmt;
 
 use crate::token::{Token, TokenType as TT};
 
-#[derive(Debug)]
+// #[derive(Debug)]
 pub struct RuntimeError {
     pub token: Token,
     pub message: String,
@@ -11,16 +11,14 @@ pub struct RuntimeError {
 impl RuntimeError {
     pub fn new(token: &Token, message: String) -> Self {
         Self {
-            token: token.to_owned(),
+            token: token.clone(),
             message,
         }
     }
 }
 
-impl error::Error for RuntimeError {}
-
 impl fmt::Display for RuntimeError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let ln = self.token.position.ln;
         let col = self.token.position.col;
         report(
@@ -34,25 +32,23 @@ impl fmt::Display for RuntimeError {
     }
 }
 
-#[derive(Debug)]
+// #[derive(Debug)]
 pub struct ParseError {
     pub token: Token,
     pub message: String,
 }
 
 impl ParseError {
-    pub fn new(token: &Token, message: String) -> Self {
+    pub fn new(token: Token, message: String) -> Self {
         Self {
-            token: token.to_owned(),
+            token: token,
             message,
         }
     }
 }
 
-impl error::Error for ParseError {}
-
 impl fmt::Display for ParseError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         let ln = self.token.position.ln;
         let col = self.token.position.col;
         if self.token.ttype == TT::EOF {

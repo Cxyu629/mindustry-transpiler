@@ -69,3 +69,9 @@ macro_rules! generic_bin_error {
         ))
     };
 }
+
+macro_rules! make_params {
+    [] => {
+        
+    };
+}
