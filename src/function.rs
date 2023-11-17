@@ -8,6 +8,8 @@ use crate::{
     token::{Object, Token},
 };
 
+use Object as Ob;
+
 pub fn clock(
     _interpreter: &mut Interpreter,
     _environment: Rc<RefCell<Environment>>,
@@ -23,15 +25,22 @@ pub fn clock(
     ));
 }
 
-// pub fn deg(
-//     _interpreter: &mut Interpreter,
-//     _environment: Rc<RefCell<Environment>>,
-//     _params: &Vec<Token>,
-//     _arguments: Vec<Object>,
-//     _statement: &Stmt,
-// ) -> Result<Object, RuntimeError> {
-//     ;
-// }
+pub fn deg(
+    _interpreter: &mut Interpreter,
+    _environment: Rc<RefCell<Environment>>,
+    params: &Vec<Token>,
+    arguments: Vec<Object>,
+    _statement: &Stmt,
+) -> Result<Object, RuntimeError> {
+    if let Some(Ob::Number(x)) = arguments.get(0) {
+        Ok(Ob::Degree(*x))
+    } else {
+        Err(RuntimeError {
+            token: params.get(0).unwrap().clone(),
+            message: "Expected `Number` type.".to_owned(),
+        })
+    }
+}
 
 pub fn run_inner(
     interpreter: &mut Interpreter,

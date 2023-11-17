@@ -414,7 +414,7 @@ impl Parser {
                 Ok(Expr::new_literal(Object::Null))
             }
 
-            TT::Number | TT::String => {
+            TT::Number | TT::String | TT::Degree => {
                 let token = self.advance();
                 Ok(Expr::new_literal(token.literal.clone().unwrap()))
             }

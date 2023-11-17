@@ -59,7 +59,9 @@ pub fn run(source: Vec<u8>) -> Result<(), ()> {
     let mut scanner = Scanner::new(source);
     let tokens: Vec<Token> = scanner.scan_tokens();
     eprintln!("scanned");
-    // eprintln!("{:?}", tokens);
+    for token in &tokens {
+        eprintln!("{:?}, {:?}", token.lexeme, token.ttype);
+    }
 
     let mut parser = Parser::new(tokens);
     let (statements, success) = parser.parse();

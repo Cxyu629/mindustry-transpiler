@@ -197,9 +197,6 @@ impl Scanner {
         keywords.insert("var", TT::Var);
         keywords.insert("print", TT::Print);
 
-        keywords.insert("num", TT::Num);
-        keywords.insert("deg", TT::Deg);
-
         // keywords.insert("max", TT::Max);
         // keywords.insert("min", TT::Min);
         // keywords.insert("angle", TT::And);

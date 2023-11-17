@@ -4,15 +4,18 @@ var hey = "hey";
   print hey;
 }
 
+var j = 10;
+
+print clock(); # works
 fun makeCounter() {
+  print clock(); # works
   var i = 0;
   fun count() {
+    print clock(); # doesn't work
     i = i + 1;
     print i;
   }
-  if true {
-    count;
-  }
+  return count;
 };
 
 var counter = makeCounter();

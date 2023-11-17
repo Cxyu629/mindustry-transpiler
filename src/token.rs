@@ -203,10 +203,6 @@ pub enum TokenType {
     Not,
     Print,
 
-    // Built-in functions
-    Num,
-    Deg,
-
     // Last thing
     EOF,
 }

@@ -11,7 +11,7 @@ use crate::{
     expr::*,
     function::{self, run_inner},
     stmt::*,
-    token::{Object, Token, TokenType},
+    token::{Object, Token, TokenType, Position},
 };
 
 use Object as Ob;
@@ -39,24 +39,25 @@ impl Interpreter {
                 arity: 0,
                 params: vec![],
                 statement: None,
+                outer_environment: Some(me.globals.to_owned()),
+            },
+        );
+
+        me.globals.borrow_mut().define(
+            "deg".to_owned(),
+            Ob::Function {
+                call: function::deg,
+                arity: 1,
+                params: vec![Token {
+                    ttype: TT::Identifier,
+                    lexeme: "number".to_owned(),
+                    literal: None,
+                    position: Position::new(0, 0),
+                }],
+                statement: None,
                 outer_environment: None,
             },
         );
-        // me.globals.borrow_mut().define(
-        //     "deg".to_owned(),
-        //     Ob::Function {
-        //         call: function::deg,
-        //         arity: 1,
-        //         params: vec![Token {
-        //             ttype: TT::Identifier,
-        //             lexeme: "number".to_owned(),
-        //             literal: None,
-        //             position: todo!(),
-        //         }],
-        //         statement: None,
-        //         outer_environment: None,
-        //     },
-        // );
 
         me
     }
